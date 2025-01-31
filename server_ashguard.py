@@ -36,8 +36,8 @@ class SensorData(Base):
     pitch = Column(Float)
     roll = Column(Float)
 
-# Pour un déploiement rapide, on peut conserver la création automatique de la table.
-# Si vous préférez gérer les migrations via un outil externe (ex : Alembic), retirez la ligne suivante.
+# Pour un déploiement rapide, on peut créer automatiquement la table.
+# En production, il est recommandé d'utiliser un outil de migration (ex. Alembic).
 Base.metadata.create_all(bind=engine)
 
 # --- Variable globale pour le dashboard ---
@@ -60,7 +60,7 @@ server = Flask(__name__)
 def receive_data():
     """
     Reçoit les données JSON postées depuis l'appareil.
-    Payload attendu :
+    Payload attendu (exemple) :
     {
         "temperature": 23.5,
         "voc": 120,
@@ -76,8 +76,6 @@ def receive_data():
     global latest_data
     try:
         data = request.get_json()
-
-        # Mise à jour de la variable globale pour le dashboard
         for key in ["temperature", "voc", "co2", "precision", "humidity", "iaq", "heading", "pitch", "roll"]:
             if key in data:
                 latest_data[key] = data[key]
@@ -138,6 +136,7 @@ app.layout = html.Div([
     [dash.dependencies.Input('interval-component', 'n_intervals')]
 )
 def update_dashboard(n):
+    # Récupération des dernières données
     temp = latest_data.get("temperature", 25.0)
     voc = latest_data.get("voc", 0.0)
     co2 = latest_data.get("co2", 400.0)
@@ -148,6 +147,7 @@ def update_dashboard(n):
     pitch = latest_data.get("pitch", 0)
     roll = latest_data.get("roll", 0)
     
+    # Gauge pour la température
     temp_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=temp,
@@ -155,6 +155,7 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 50]}}
     ))
     
+    # Gauge pour les COV (VOC)
     voc_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=voc,
@@ -162,6 +163,7 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 500]}}
     ))
     
+    # Gauge pour le CO₂
     co2_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=co2,
@@ -169,6 +171,7 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 2000]}}
     ))
     
+    # Gauge pour la précision
     precision_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=precision,
@@ -176,6 +179,7 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 3], 'dtick': 1}}
     ))
     
+    # Gauge pour l'humidité
     humidity_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=humidity,
@@ -183,6 +187,7 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 100]}}
     ))
     
+    # Gauge pour l'IAQ
     iaq_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=iaq,
@@ -190,9 +195,11 @@ def update_dashboard(n):
         gauge={'axis': {'range': [0, 500]}}
     ))
     
+    # Boussole pour le heading
     compass = go.Figure(go.Indicator(
         mode="gauge+number",
         value=heading,
+    
         number={'suffix': "°"},
         title={'text': "Heading"},
         gauge={
@@ -207,6 +214,7 @@ def update_dashboard(n):
         }
     ))
     
+    # Cube 3D dynamique (rotation selon pitch et roll)
     cube_vertices = np.array([
         [-0.5, -0.5, -0.5],
         [-0.5, -0.5,  0.5],
@@ -217,25 +225,20 @@ def update_dashboard(n):
         [ 0.5,  0.5, -0.5],
         [ 0.5,  0.5,  0.5]
     ])
-    
     pitch_rad = np.radians(pitch)
     roll_rad = np.radians(roll)
-    
     R_pitch = np.array([
         [ np.cos(pitch_rad), 0, np.sin(pitch_rad)],
         [0, 1, 0],
         [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]
     ])
-    
     R_roll = np.array([
         [1, 0, 0],
         [0, np.cos(roll_rad), -np.sin(roll_rad)],
         [0, np.sin(roll_rad),  np.cos(roll_rad)]
     ])
-    
     R = R_pitch @ R_roll
     rotated_vertices = cube_vertices.dot(R.T)
-    
     faces = [
         [0, 1, 3], [0, 3, 2],
         [4, 6, 7], [4, 7, 5],
@@ -244,17 +247,14 @@ def update_dashboard(n):
         [0, 2, 6], [0, 6, 4],
         [1, 5, 7], [1, 7, 3]
     ]
-    
     x = rotated_vertices[:, 0]
     y = rotated_vertices[:, 1]
     z = rotated_vertices[:, 2]
-    
     i_idx, j_idx, k_idx = [], [], []
     for face in faces:
         i_idx.append(face[0])
         j_idx.append(face[1])
         k_idx.append(face[2])
-    
     cube_mesh = go.Figure(data=[
         go.Mesh3d(
             x=x, y=y, z=z,
